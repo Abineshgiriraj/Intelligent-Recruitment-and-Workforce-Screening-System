@@ -27,28 +27,19 @@ Rules:
 Resume text:
 {resume_text}
 
-Expected output format (do not include this line in output):
+Expected output format:
 {{
-"name": "Ravi Kumar",
-"email": "[ravi@example.com](mailto:ravi@example.com)",
-"phone": "9876543210",
-"department": "HR",
-"education": "MBA Human Resource Management",
-"work_experience": 4,
-"skills": [
-"Recruitment",
-"Payroll",
-"Compliance",
-"Excel",
-"Communication"
-],
-"projects": [
-"Employee Attendance Automation System"
-],
-"certifications": [
-"Labour Law Compliance"
-]
+  "name": "Ravi Kumar",
+  "email": "ravi@example.com",
+  "phone": "9876543210",
+  "department": "HR",
+  "education": "MBA Human Resource Management",
+  "work_experience": 4,
+  "skills": ["Recruitment", "Payroll", "Compliance", "Excel", "Communication"],
+  "projects": ["Employee Attendance Automation System"],
+  "certifications": ["Labour Law Compliance"]
 }}"""
+
 
 EXTRACT_JD_DETAILS = """You are an AI job description parser designed for textile, garment manufacturing, manufacturing, HR, operations, IT, and non-IT recruitment.
 
@@ -76,70 +67,48 @@ Rules:
 Job description text:
 {jd_text}
 
-Expected output format (do not include this line in output):
+Expected output format:
 {{
-"department": "Production",
-"job_role": "Production Supervisor",
-"min_work_experience": 3,
-"max_work_experience": 6,
-"skills": [
-"Production Planning",
-"Line Balancing",
-"Team Handling",
-"Quality Control",
-"Excel"
-]
+  "department": "Production",
+  "job_role": "Production Supervisor",
+  "min_work_experience": 3,
+  "max_work_experience": 6,
+  "skills": ["Production Planning", "Line Balancing", "Team Handling", "Quality Control", "Excel"]
 }}"""
 
-CANDIDATE_EVALUATION = """You are an AI recruitment evaluation system designed mainly for textile and manufacturing industries, while also supporting IT and non-IT roles.
 
-Evaluate the candidate against the job description and return ONLY a valid JSON object — no explanation, no markdown, no code fences.
+CANDIDATE_EVALUATION = """You are an expert HR consultant and recruitment specialist for the textile, manufacturing, and general corporate sectors.
 
-Evaluation rules:
+You will receive a candidate's profile and a job description. Your task is to write a qualitative evaluation.
+Return ONLY a valid JSON object — no explanation, no markdown, no code fences.
 
-1. SKILLS:
+Fields to return:
 
-* Check if the candidate matches the required skills from the JD.
-* Consider technical, manufacturing, HR, operational, and soft skills.
-* Treat related/equivalent skills as matches.
-* Focus strongly on textile/manufacturing relevance if present.
+* candidate_name (string — from candidate profile)
+* department_fit (string — the department this candidate best fits, based on profile and JD)
+* strengths (list of 2–4 strings — specific strengths of this candidate relevant to the JD)
+* weaknesses (list of 2–3 strings — key gaps or weaknesses relative to JD requirements)
+* reason (string — 2-3 sentences: overall fit assessment covering skills, experience, and department suitability)
+* recommendation (string — 1-2 sentences: specific, actionable advice for the recruiter)
 
-2. EXPERIENCE:
+Rules:
 
-* Candidate work_experience should reasonably match the JD requirements.
-* Accept small variations in experience.
-
-3. DEPARTMENT FIT:
-
-* Determine whether the candidate is suitable for the department mentioned in the JD.
-
-4. STATUS:
-
-* Return "Selected" if the candidate is a strong or moderate fit.
-* Return "Rejected" if the candidate lacks major required skills or experience.
+* Be specific and factual. Reference actual skills, experience numbers, and department relevance.
+* Focus on textile/manufacturing context if the JD is from that domain.
+* Return ONLY the JSON object. No extra text.
 
 Candidate profile (JSON):
 {resume_json}
 
-Job description requirements (JSON):
+Job description (JSON):
 {jd_json}
 
-Return ONLY this JSON (no extra text):
-
+Return ONLY this JSON:
 {{
-"candidate_name": "Ravi Kumar",
-"department_fit": "HR",
-"candidate_status": "Selected or Rejected",
-"reason": "Two or three sentences explaining the decision based on skills, experience, department suitability, and manufacturing relevance.",
-"matched_skills": [
-"Recruitment",
-"Payroll",
-"Compliance"
-],
-"missing_skills": [
-"SEDEX Audit"
-],
-"skill_match_percentage": 82,
-"experience": 4,
-"recommendation": "Strong fit for HR Executive role in textile manufacturing industry."
+  "candidate_name": "Ravi Kumar",
+  "department_fit": "HR",
+  "strengths": ["4 years of active recruitment experience", "Strong payroll and compliance knowledge"],
+  "weaknesses": ["No SEDEX audit exposure", "Limited manufacturing floor experience"],
+  "reason": "Ravi brings solid HR fundamentals with 4 years of experience covering recruitment, payroll, and compliance — all core requirements for this role. His department fit is strong, though his manufacturing-specific audit knowledge is limited.",
+  "recommendation": "Shortlist for HR Executive role. Recommend a brief interview to assess audit awareness and willingness to upskill on SEDEX compliance."
 }}"""
