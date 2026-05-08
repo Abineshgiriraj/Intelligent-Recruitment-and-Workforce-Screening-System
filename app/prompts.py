@@ -29,17 +29,26 @@ Resume text:
 
 Expected output format:
 {{
-  "name": "Ravi Kumar",
-  "email": "ravi@example.com",
-  "phone": "9876543210",
-  "department": "HR",
-  "education": "MBA Human Resource Management",
-  "work_experience": 4,
-  "skills": ["Recruitment", "Payroll", "Compliance", "Excel", "Communication"],
-  "projects": ["Employee Attendance Automation System"],
-  "certifications": ["Labour Law Compliance"]
+"name": "Ravi Kumar",
+"email": "[ravi@example.com](mailto:ravi@example.com)",
+"phone": "9876543210",
+"department": "HR",
+"education": "MBA Human Resource Management",
+"work_experience": 4,
+"skills": [
+"Recruitment",
+"Payroll",
+"Compliance",
+"Excel",
+"Communication"
+],
+"projects": [
+"Employee Attendance Automation System"
+],
+"certifications": [
+"Labour Law Compliance"
+]
 }}"""
-
 
 EXTRACT_JD_DETAILS = """You are an AI job description parser designed for textile, garment manufacturing, manufacturing, HR, operations, IT, and non-IT recruitment.
 
@@ -51,14 +60,28 @@ Fields to extract:
 
 * department (string)
 * job_role (string)
-* min_work_experience (integer — minimum years required, or null)
-* max_work_experience (integer — maximum years acceptable, or null)
+* min_work_experience (integer or null)
+* max_work_experience (integer or null)
 * skills (list of strings — required technical, operational, manufacturing, HR, and soft skills)
 
 Rules:
 
 * Detect department from the JD.
-* If experience is stated as "5+ years", use 5 for min and 8 for max (+3 assumption).
+* Extract experience ONLY if it is explicitly mentioned in the JD.
+* If no experience requirement is mentioned, return:
+
+  * "min_work_experience": null
+  * "max_work_experience": null
+* Do NOT assume or generate experience values.
+* Do NOT infer experience from job role, department, or seniority words.
+* If experience is stated as "5+ years", use:
+
+  * "min_work_experience": 5
+  * "max_work_experience": null
+* If experience is stated as a range like "3-6 years", extract:
+
+  * "min_work_experience": 3
+  * "max_work_experience": 6
 * Include textile/manufacturing-related requirements if present.
 * Include IT and non-IT skills.
 * Use null for any missing field.
@@ -69,13 +92,17 @@ Job description text:
 
 Expected output format:
 {{
-  "department": "Production",
-  "job_role": "Production Supervisor",
-  "min_work_experience": 3,
-  "max_work_experience": 6,
-  "skills": ["Production Planning", "Line Balancing", "Team Handling", "Quality Control", "Excel"]
+"department": "HR",
+"job_role": "HR Executive",
+"min_work_experience": null,
+"max_work_experience": null,
+"skills": [
+"Recruitment",
+"Payroll",
+"Compliance",
+"Excel"
+]
 }}"""
-
 
 CANDIDATE_EVALUATION = """You are an expert HR consultant and recruitment specialist for the textile, manufacturing, and general corporate sectors.
 
@@ -93,8 +120,12 @@ Fields to return:
 
 Rules:
 
-* Be specific and factual. Reference actual skills, experience numbers, and department relevance.
+* Be specific and factual.
+* Reference actual skills, certifications, experience numbers, and department relevance.
 * Focus on textile/manufacturing context if the JD is from that domain.
+* If JD experience is null, do NOT mention missing or expected experience.
+* Do NOT reject candidates only because experience is unavailable in the JD.
+* Avoid assumptions not present in the candidate profile or JD.
 * Return ONLY the JSON object. No extra text.
 
 Candidate profile (JSON):
@@ -105,10 +136,16 @@ Job description (JSON):
 
 Return ONLY this JSON:
 {{
-  "candidate_name": "Ravi Kumar",
-  "department_fit": "HR",
-  "strengths": ["4 years of active recruitment experience", "Strong payroll and compliance knowledge"],
-  "weaknesses": ["No SEDEX audit exposure", "Limited manufacturing floor experience"],
-  "reason": "Ravi brings solid HR fundamentals with 4 years of experience covering recruitment, payroll, and compliance — all core requirements for this role. His department fit is strong, though his manufacturing-specific audit knowledge is limited.",
-  "recommendation": "Shortlist for HR Executive role. Recommend a brief interview to assess audit awareness and willingness to upskill on SEDEX compliance."
+"candidate_name": "Ravi Kumar",
+"department_fit": "HR",
+"strengths": [
+"4 years of active recruitment experience",
+"Strong payroll and compliance knowledge"
+],
+"weaknesses": [
+"No SEDEX audit exposure",
+"Limited manufacturing floor experience"
+],
+"reason": "Ravi brings solid HR fundamentals with 4 years of experience covering recruitment, payroll, and compliance — all core requirements for this role. His department fit is strong, though his manufacturing-specific audit knowledge is limited.",
+"recommendation": "Shortlist for HR Executive role. Recommend a brief interview to assess audit awareness and willingness to upskill on SEDEX compliance."
 }}"""
