@@ -10,16 +10,19 @@ Workflow:
   Step 4 → Dashboard: aggregate stats → Top 3 podium → comparison table → detailed cards
 """
 
+import copy
 import hashlib
 import io
+import time
 
 import PyPDF2
 import requests
 import streamlit as st
+from pdf_report import generate_pdf_report
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="AI Recruitment Screener",
+    page_title="Intelligent Recruitment and Workforce Screening System",
     page_icon="🏭",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -131,7 +134,7 @@ def chips(items, css_class="skill-chip"):
 # ══════════════════════════════════════════════════════════════════════════════
 col_h1, col_h2 = st.columns([5, 1])
 with col_h1:
-    st.title("🏭 AI Recruitment Screener")
+    st.title("🏭 Intelligent Recruitment and Workforce Screening System")
     st.caption("Intelligent Workforce Screening System · Textile & Manufacturing HR · Powered by Groq")
 with col_h2:
     st.button("🗑️ Clear All", on_click=_reset_all, use_container_width=True)
@@ -226,42 +229,81 @@ else:
 
         # ── API calls — ONLY triggered by button ──────────────────────────────
         if analyze_clicked:
+            total    = len(uploaded_files)
             progress = st.progress(0.0, text="Starting…")
-            total = len(uploaded_files)
+            status_box = st.empty()   # live status line
 
             for idx, uf in enumerate(uploaded_files):
-                progress.progress(idx / total,
-                    text=f"Analyzing **{uf.name}** ({idx+1}/{total})…")
+                # Reset ALL local temp variables at the start of each iteration
+                raw = text = h = resp = data = result = None
+
+                progress.progress(
+                    idx / total,
+                    text=f"Analyzing **{uf.name}** ({idx+1}/{total})…",
+                )
+                status_box.caption(f"⏳ Processing: `{uf.name}`")
+                print(f"\n[UI] ── Resume {idx+1}/{total}: {uf.name} ──")
 
                 raw = uf.read()
                 h   = fhash(raw)
 
                 if h in st.session_state.proc_hashes:
-                    st.session_state.results[uf.name] = st.session_state.proc_hashes[h]
+                    print(f"[UI] Cache hit for '{uf.name}' — reusing stored result")
+                    st.session_state.results[uf.name] = copy.deepcopy(
+                        st.session_state.proc_hashes[h]
+                    )
+                    status_box.caption(f"✅ `{uf.name}` — loaded from cache")
                     continue
 
                 text = extract_text(raw, uf.name)
                 if text.startswith("["):
                     result = {"status": "error", "message": text}
+                    print(f"[UI] Text extraction failed for '{uf.name}': {text}")
                 else:
                     try:
                         resp = requests.post(
                             f"{BACKEND_URL}/screening/text/",
-                            json={"resume_text": text,
-                                  "jd_text": st.session_state.jd_text},
-                            timeout=120,
+                            json={
+                                "resume_text": text,
+                                # Send pre-parsed JD dict — skips 1 Groq API call per resume
+                                "jd_parsed":  st.session_state.jd_details,
+                                "jd_text":    None,   # not needed when jd_parsed is present
+                                "filename":   uf.name,
+                            },
+                            timeout=180,
                         )
-                        result = ({"status": "success", "data": resp.json()}
-                                  if resp.status_code == 200
-                                  else {"status": "error",
-                                        "message": f"HTTP {resp.status_code}: {resp.text}"})
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            name_got = data.get("candidate_name", "?")
+                            pct_got  = data.get("match_percentage", "?")
+                            print(f"[UI] ✅ '{uf.name}' → candidate='{name_got}' | {pct_got}%")
+                            status_box.caption(
+                                f"✅ `{uf.name}` → **{name_got}** | {pct_got}% match"
+                            )
+                            result = {"status": "success", "data": copy.deepcopy(data)}
+                        else:
+                            print(f"[UI] ❌ '{uf.name}' backend HTTP {resp.status_code}")
+                            result = {
+                                "status": "error",
+                                "message": f"HTTP {resp.status_code}: {resp.text[:200]}",
+                            }
+                    except requests.exceptions.Timeout:
+                        print(f"[UI] ⏱ Timeout for '{uf.name}'")
+                        result = {"status": "error", "message": "Request timed out (180s)"}
                     except Exception as e:
+                        print(f"[UI] 💥 Exception for '{uf.name}': {e}")
                         result = {"status": "error", "message": str(e)}
 
-                st.session_state.results[uf.name] = result
-                st.session_state.proc_hashes[h]   = result
+                # Store independent deep-copies — never share dict references
+                st.session_state.results[uf.name]  = copy.deepcopy(result)
+                st.session_state.proc_hashes[h]    = copy.deepcopy(result)
 
-            progress.progress(1.0, text="✅ Analysis complete!")
+                # Inter-resume delay — prevents Groq rate-limit errors on large batches
+                if idx < total - 1:   # no delay after the last resume
+                    time.sleep(1.5)
+
+            progress.progress(1.0, text="✅ All resumes analyzed!")
+            status_box.empty()
     else:
         if not st.session_state.results:
             st.info("👆 Upload PDF resumes above.")
@@ -275,7 +317,7 @@ if not st.session_state.results:
 
 st.markdown("---")
 
-# Partition results
+# ── Partition & sort results ──────────────────────────────────────────────────
 successful = [
     (name, r) for name, r in st.session_state.results.items()
     if r["status"] == "success"
@@ -288,6 +330,24 @@ successful.sort(
     key=lambda x: x[1]["data"].get("match_percentage", 0),
     reverse=True,
 )
+
+# ── Final dedup validation ────────────────────────────────────────────────────
+_seen_names: dict = {}
+_dupe_warnings: list = []
+for _fname, _res in successful:
+    _cname = _res["data"].get("candidate_name", "?")
+    if _cname in _seen_names:
+        _dupe_warnings.append(
+            f"⚠️ Duplicate name **'{_cname}'** detected in `{_fname}` "
+            f"and `{_seen_names[_cname]}`. Results may be inaccurate."
+        )
+    else:
+        _seen_names[_cname] = _fname
+
+if _dupe_warnings:
+    with st.expander("⚠️ Duplicate Candidate Warnings", expanded=True):
+        for w in _dupe_warnings:
+            st.warning(w)
 
 # ── Aggregate Stats ────────────────────────────────────────────────────────────
 st.subheader("📊 Recruitment Overview")
@@ -304,6 +364,25 @@ s2.metric("✅ Selected",       selected_c)
 s3.metric("🟡 Moderate Fit",   moderate_c)
 s4.metric("❌ Rejected",        rejected_c)
 s5.metric("Avg Match Score",   f"{avg_match}%")
+
+# ── Download Report Button ────────────────────────────────────────────────────
+if successful and st.session_state.jd_details:
+    try:
+        pdf_bytes = generate_pdf_report(
+            jd_details=st.session_state.jd_details,
+            results=st.session_state.results,
+        )
+        from datetime import datetime
+        filename = f"Recruitment_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+        st.download_button(
+            label="📄 Download Recruitment Report (PDF)",
+            data=pdf_bytes,
+            file_name=filename,
+            mime="application/pdf",
+            use_container_width=True,
+        )
+    except Exception as e:
+        st.warning(f"PDF generation failed: {e}")
 
 st.markdown("---")
 
